@@ -38,19 +38,41 @@ class generic_transport(object):
         raise NotImplemented
 
 
-class couch_transport(object):
+class mongo_transport(generic_transport):
+    def _connect(self, host, port):
+        self.server = pymongo.Connect(host, port)
+
+    def get_db(self, dbname):
+        self.db = db = self.server[dbname]
+        return db
+
+    def drop_db(self, dbname):
+        return self.server.drop_database(dbname)
+
+    def get_collection(self, cname):
+        self.collection = collection = self.db[cname]
+        return collection
+
+    def get_record(self, record):
+        return self.collection.get(record)
+
+class couch_transport(generic_transport):
+    db = None
+
     def _connect(self, host, port):
         connection_string = "http://%s:%s" % (host, port)
         self.server = couch.Server(uri=connection_string)
 
     def get_db(self, dbname):
-        return self.server.get_or_create_db(dbname)
+        self.db = db = self.server.get_or_create_db(dbname)
+        return db
 
     def drop_db(self, dbname):
-        return self.server.delete_db(dbname)
+        try: return self.server.delete_db(dbname)
+        finally: self.db = None
 
     def get_record(self, record):
-        return self.server.get(record)
+        return self.db.get(record)
 
 class VogelerStore(object):
 
@@ -62,7 +84,9 @@ class VogelerStore(object):
         if not dbname:
             dbname = self.dbname
 
-        self.db = self.transport.get_db(dbname)
+        db = self.transport.get_db(dbname)
+        self.db = db
+        return db
 
     def drop_db(self, dbname=None):
         if not dbname:
